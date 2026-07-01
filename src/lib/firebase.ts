@@ -3,12 +3,13 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBTX4367sR797doLzEs5NEWKRjRTwIyU84",
-  authDomain: "vertical-phoenix-8tj8l.firebaseapp.com",
-  projectId: "vertical-phoenix-8tj8l",
-  storageBucket: "vertical-phoenix-8tj8l.firebasestorage.app",
-  messagingSenderId: "261541213943",
-  appId: "1:261541213943:web:c5f2c3c4ed71686d2e45f2"
+  apiKey: "AIzaSyCWHhO-haykimyNRAOSZDAVZuIOdTSCbeE",
+  authDomain: "studyplanner-bb1c2.firebaseapp.com",
+  projectId: "studyplanner-bb1c2",
+  storageBucket: "studyplanner-bb1c2.firebasestorage.app",
+  messagingSenderId: "332382276470",
+  appId: "1:332382276470:web:6be9dbf37b7b56aa438857",
+  measurementId: "G-F4HPQVWQWH"
 };
 
 // Initialize Firebase
@@ -16,7 +17,7 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Services
 export const auth = getAuth(app);
-export const db = getFirestore(app, "ai-studio-d24a1f2b-fcbc-48ec-8825-20a140c01734");
+export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Custom Admin Email from Metadata to seed administrator state seamlessly
