@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global deny-by-default safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Authentication and verification helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isUserAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    function isUserAccepted() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'accepted' || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
+    }
+
+    // Rules for user profiles & invitation request flow
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isUserAdmin());
+      
+      // Let anyone create their initial pending document safely, or let the primary admin self-register as accepted
+      allow create: if isSignedIn() && request.auth.uid == userId && (
+        (
+          request.resource.data.uid == userId &&
+          request.resource.data.status == 'pending' &&
+          request.resource.data.isAdmin == false
+        ) || (
+          'email' in request.auth.token &&
+          request.auth.token.email.toLowerCase() == 'montserratsarlopez@gmail.com' &&
+          request.resource.data.uid == userId &&
+          request.resource.data.status == 'accepted' &&
+          request.resource.data.isAdmin == true
+        )
+      );
+
+      // Allow admin to update status, or allow the owner to update fields except their admin status and approval status
+      allow update: if isSignedIn() && (
+        isUserAdmin() || (
+          request.auth.uid == userId &&
+          request.resource.data.status == resource.data.status &&
+          request.resource.data.isAdmin == resource.data.isAdmin
+        )
+      );
+
+      allow delete: if isUserAdmin();
+    }
+
+    // Owner validation helper
+    function isOwner(data) {
+      return data != null && data.userId == request.auth.uid;
+    }
+
+    // User-specific collections rules
+    match /tasks/{documentId} {
+      allow read, update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && isOwner(request.resource.data);
+    }
+
+    match /events/{documentId} {
+      allow read, update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && isOwner(request.resource.data);
+    }
+
+    match /reminders/{documentId} {
+      allow read, update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && isOwner(request.resource.data);
+    }
+
+    match /study_materials/{documentId} {
+      allow read, update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && isOwner(request.resource.data);
+    }
+
+    match /schedules/{documentId} {
+      allow read, update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && isOwner(request.resource.data);
+    }
+
+    match /flashcards/{documentId} {
+      allow read, update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && isOwner(request.resource.data);
+    }
+
+    match /study_notes/{documentId} {
+      allow read, update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && isOwner(request.resource.data);
+    }
+
+    match /study_goals/{documentId} {
+      allow read, update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && isOwner(request.resource.data);
+    }
+
+    match /study_checklists/{documentId} {
+      allow read, update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && isOwner(request.resource.data);
+    }
+
+    match /categories/{documentId} {
+      allow read: if isUserAccepted() && (documentId == request.auth.uid || (resource != null && isOwner(resource.data)));
+      allow update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && (documentId == request.auth.uid || isOwner(request.resource.data));
+    }
+
+    match /passing_scores/{documentId} {
+      allow read: if isUserAccepted() && (documentId == request.auth.uid || (resource != null && isOwner(resource.data)));
+      allow update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && (documentId == request.auth.uid || isOwner(request.resource.data));
+    }
+
+    match /feynman_explanations/{documentId} {
+      allow read, update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && isOwner(request.resource.data);
+    }
+
+    match /mind_maps/{documentId} {
+      allow read, update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && isOwner(request.resource.data);
+    }
+
+    match /study_summaries/{documentId} {
+      allow read, update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && isOwner(request.resource.data);
+    }
+
+    match /subject_grades/{documentId} {
+      allow read, update, delete: if isUserAccepted() && isOwner(resource.data);
+      allow create: if isUserAccepted() && isOwner(request.resource.data);
+    }
+  }
+}

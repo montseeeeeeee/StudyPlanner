@@ -1,0 +1,213 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with registration and admin status",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string" },
+        "isAdmin": { "type": "boolean" },
+        "requestedAt": { "type": "string" },
+        "acceptedAt": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["uid", "email", "name", "status", "isAdmin"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A study or homework task",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "dueDate": { "type": "string" },
+        "completedDate": { "type": "string" },
+        "priority": { "type": "string" },
+        "category": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "userId", "title", "completed", "dueDate", "priority", "category"]
+    },
+    "CalendarEvent": {
+      "title": "CalendarEvent",
+      "description": "A school event or exam",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "userId", "title", "date", "type"]
+    },
+    "Reminder": {
+      "title": "Reminder",
+      "description": "A general reminder",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "datetime": { "type": "string" },
+        "completed": { "type": "boolean" }
+      },
+      "required": ["id", "userId", "title", "datetime", "completed"]
+    },
+    "StudyMaterial": {
+      "title": "StudyMaterial",
+      "description": "A study material or topic with quiz questions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "text": { "type": "string" },
+        "questions": { "type": "array" },
+        "attempts": { "type": "array" }
+      },
+      "required": ["id", "userId", "title", "text", "questions", "attempts"]
+    },
+    "ClassSchedule": {
+      "title": "ClassSchedule",
+      "description": "A school class schedule item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "subject": { "type": "string" },
+        "dayOfWeek": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "classroom": { "type": "string" }
+      },
+      "required": ["id", "userId", "subject", "dayOfWeek", "startTime", "endTime"]
+    },
+    "Flashcard": {
+      "title": "Flashcard",
+      "description": "A dynamic review flashcard",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "subject": { "type": "string" },
+        "question": { "type": "string" },
+        "answer": { "type": "string" },
+        "status": { "type": "string" },
+        "leitnerBox": { "type": "number" },
+        "nextReviewDate": { "type": "string" },
+        "attachments": { "type": "array" }
+      },
+      "required": ["id", "userId", "subject", "question", "answer", "status"]
+    },
+    "StudyNote": {
+      "title": "StudyNote",
+      "description": "A structured Cornell or regular study note",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "subject": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "isCornell": { "type": "boolean" },
+        "cornellKeywords": { "type": "string" },
+        "cornellSummary": { "type": "string" },
+        "attachments": { "type": "array" }
+      },
+      "required": ["id", "userId", "subject", "title", "content", "createdAt"]
+    },
+    "StudyGoal": {
+      "title": "StudyGoal",
+      "description": "A daily or weekly study goal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "targetValue": { "type": "number" },
+        "currentValue": { "type": "number" },
+        "unit": { "type": "string" },
+        "completed": { "type": "boolean" }
+      },
+      "required": ["id", "userId", "title", "type", "targetValue", "currentValue", "unit", "completed"]
+    },
+    "StudyChecklist": {
+      "title": "StudyChecklist",
+      "description": "A list of checklist items for a topic",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "items": { "type": "array" }
+      },
+      "required": ["id", "userId", "title", "subject", "items"]
+    },
+    "CategoryData": {
+      "title": "CategoryData",
+      "description": "Custom categories for the user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "list": { "type": "array" }
+      },
+      "required": ["userId", "list"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "User",
+      "description": "Store profiles of users including admin state and authorization status"
+    },
+    "tasks": {
+      "schema": "Task",
+      "description": "Store study and homework tasks for each user"
+    },
+    "events": {
+      "schema": "CalendarEvent",
+      "description": "Store school events and exam dates"
+    },
+    "reminders": {
+      "schema": "Reminder",
+      "description": "Store user reminders"
+    },
+    "study_materials": {
+      "schema": "StudyMaterial",
+      "description": "Store materials, quizzes, and study progress metrics"
+    },
+    "schedules": {
+      "schema": "ClassSchedule",
+      "description": "Store the class timetable schedules"
+    },
+    "flashcards": {
+      "schema": "Flashcard",
+      "description": "Store flashcard review cards"
+    },
+    "study_notes": {
+      "schema": "StudyNote",
+      "description": "Store Cornell style study notes"
+    },
+    "study_goals": {
+      "schema": "StudyGoal",
+      "description": "Store daily and weekly student habits/goals"
+    },
+    "study_checklists": {
+      "schema": "StudyChecklist",
+      "description": "Store task-lists and checklists for examinations"
+    },
+    "categories": {
+      "schema": "CategoryData",
+      "description": "Store user specific class subject lists"
+    }
+  }
+}

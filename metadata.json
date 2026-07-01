@@ -1,0 +1,6 @@
+{
+  "name": "StudyPlanner",
+  "description": "Una aplicación móvil tipo agenda/cuaderno para estudiantes que les permite organizar sus tareas, calendario, recordatorios y estudiar con cuestionarios personalizados generados por IA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
