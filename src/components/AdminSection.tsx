@@ -104,7 +104,7 @@ export default function AdminSection({ theme }: AdminSectionProps) {
             Panel de Administración
           </h2>
           <p className="text-xs text-stone-500 oscuro:text-stone-400">
-            Acepta o rechaza solicitudes de invitaciones para permitir el registro y acceso a la agenda StudyPlanner.
+            Gestiona los estudiantes y administradores registrados en la plataforma StudyPlanner.
           </p>
         </div>
 
@@ -165,10 +165,10 @@ export default function AdminSection({ theme }: AdminSectionProps) {
 
       {/* Requests List */}
       {loading ? (
-        <div className="py-12 text-center text-stone-500">Cargando solicitudes de acceso...</div>
+        <div className="py-12 text-center text-stone-500">Cargando lista de usuarios...</div>
       ) : filteredUsers.length === 0 ? (
         <div className="py-12 text-center rounded-2xl border-2 border-dashed border-stone-200 oscuro:border-stone-800 text-stone-500">
-          No se encontraron solicitudes que coincidan con la búsqueda o filtro.
+          No se encontraron usuarios que coincidan con la búsqueda o filtro.
         </div>
       ) : (
         <div className="space-y-3">

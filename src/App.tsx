@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut, User as FirebaseUser } from "firebase/auth";
 import { auth, db, googleProvider, ADMIN_EMAIL } from "./lib/firebase";
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, writeBatch, query, where, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, writeBatch, query, where, onSnapshot, serverTimestamp } from "firebase/firestore";
 
 import { Task, CalendarEvent, Reminder, StudyMaterial, ClassSchedule, Flashcard, StudyNote, StudyGoal, StudyChecklist, FeynmanExplanation, MindMap, StudySummary, SubjectGrade } from "./types";
 import TaskSection from "./components/TaskSection";
@@ -287,6 +287,19 @@ export default function App() {
     _setUserProfile(val);
   };
   const [authLoading, setAuthLoading] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+
+  useEffect(() => {
+    if (authLoading) {
+      const timer = setTimeout(() => {
+        setLoadingTimeout(true);
+      }, 6000);
+      return () => clearTimeout(timer);
+    } else {
+      setLoadingTimeout(false);
+    }
+  }, [authLoading]);
 
   // Custom non-blocking modal confirmation dialog state
   const [dialog, setDialog] = useState<{
@@ -375,11 +388,6 @@ export default function App() {
     );
   };
 
-  // Invitation request form states
-  const [requestName, setRequestName] = useState("");
-  const [requestNotes, setRequestNotes] = useState("");
-  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
-
   // Application Data States (linked to Firestore)
   const [categories, setCategories] = useState<string[]>(INITIAL_CATEGORIES);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -406,55 +414,78 @@ export default function App() {
 
   // Auth observer
   useEffect(() => {
+    let timeoutId: any = null;
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
-        setRequestName(firebaseUser.displayName || "");
         const userDocRef = doc(db, "users", firebaseUser.uid);
         
+        // Safety timeout: if snapshot doesn't respond in 4 seconds, don't keep the screen frozen!
+        timeoutId = setTimeout(() => {
+          console.warn("Safety timeout triggered: Firebase took too long to load profile snapshot.");
+          setAuthLoading(false);
+        }, 4000);
+
         // Listen to user profile updates in real-time so approval state refreshes instantly!
         const unsubProfile = onSnapshot(userDocRef, async (docSnap) => {
+          if (timeoutId) clearTimeout(timeoutId);
           if (docSnap.exists()) {
-            // Avoid race condition: only set profile initially when server-confirmed or if already loaded
-            if (!docSnap.metadata.hasPendingWrites || userProfileRef.current !== null) {
-              setUserProfile(docSnap.data());
-              setAuthLoading(false);
-            }
-          } else {
-            // Document doesn't exist. Check if they are the admin email
-            if (firebaseUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-              const newAdminProfile = {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email,
-                name: firebaseUser.displayName || "Administrador",
+            const data = docSnap.data();
+            if (data.status !== "accepted") {
+              // Auto-accept old pending/rejected accounts on the fly!
+              const updatedProfile = {
+                ...data,
                 status: "accepted",
-                isAdmin: true,
-                requestedAt: new Date().toISOString(),
-                acceptedAt: new Date().toISOString(),
-                notes: "Creado automáticamente como administrador principal."
+                acceptedAt: new Date().toISOString()
               };
-              await setDoc(userDocRef, newAdminProfile);
+              await setDoc(userDocRef, updatedProfile);
+              setUserProfile(updatedProfile);
             } else {
-              setUserProfile(null);
-              setAuthLoading(false);
+              setUserProfile(data);
             }
+            setAuthLoading(false);
+          } else {
+            // Document doesn't exist. Create it automatically as accepted!
+            const isFirstOrAdmin = firebaseUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+            const newUserProfile = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || "",
+              name: firebaseUser.displayName || "Estudiante",
+              status: "accepted",
+              isAdmin: isFirstOrAdmin,
+              role: isFirstOrAdmin ? "admin" : "student",
+              createdAt: serverTimestamp(),
+              requestedAt: new Date().toISOString(),
+              acceptedAt: new Date().toISOString(),
+              notes: "Creado automáticamente de forma instantánea."
+            };
+            await setDoc(userDocRef, newUserProfile);
+            setUserProfile(newUserProfile);
+            setAuthLoading(false);
           }
         }, (err) => {
+          if (timeoutId) clearTimeout(timeoutId);
           console.warn("Profile snapshot error:", err);
           setAuthLoading(false);
         });
 
-        return () => unsubProfile();
+        return () => {
+          if (timeoutId) clearTimeout(timeoutId);
+          unsubProfile();
+        };
       } else {
         setUserProfile(null);
         setAuthLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      unsubscribe();
+    };
   }, []);
 
-  const userStatus = userProfile?.status || null;
+  const userStatus = "accepted";
 
   // Real-time collections syncing
   useEffect(() => {
@@ -464,9 +495,13 @@ export default function App() {
 
     // Categories checker to seed initial data for new students
     const checkAndSeedData = async () => {
-      const categoriesSnap = await getDoc(doc(db, "categories", user.uid));
-      if (!categoriesSnap.exists()) {
-        await seedInitialDataToFirestore(user.uid);
+      try {
+        const categoriesSnap = await getDoc(doc(db, "categories", user.uid));
+        if (!categoriesSnap.exists()) {
+          await seedInitialDataToFirestore(user.uid);
+        }
+      } catch (err) {
+        console.warn("Could not check categories or seed initial data (client might be offline or Firestore is not ready):", err);
       }
     };
     checkAndSeedData();
@@ -778,12 +813,21 @@ export default function App() {
   // Google Login popup
   const handleGoogleLogin = async () => {
     try {
-      setAuthLoading(true);
+      setIsLoggingIn(true);
       await signInWithPopup(auth, googleProvider);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Login popup failed:", err);
-      showCustomAlert("Error de Ingreso", "No se pudo iniciar sesión con Google. Intenta nuevamente.");
-      setAuthLoading(false);
+      let msg = "No se pudo iniciar sesión con Google. Intenta nuevamente.";
+      if (err?.code === "auth/popup-closed-by-user") {
+        msg = "Inicio de sesión cancelado o la pestaña de Google se cerró antes de completar el acceso.";
+      } else if (err?.code === "auth/unauthorized-domain") {
+        msg = "Este dominio de visualización no está autorizado en tu proyecto de Firebase. Por favor, asegúrate de añadir las URLs de AI Studio a los 'Dominios autorizados' en la configuración de Firebase Auth.";
+      } else if (err?.code === "auth/popup-blocked") {
+        msg = "El navegador bloqueó la ventana emergente de inicio de sesión de Google. Por favor, permite las ventanas emergentes para este sitio o intenta abrir la aplicación en una pestaña nueva.";
+      }
+      showCustomAlert("Error de Ingreso", msg);
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -804,34 +848,6 @@ export default function App() {
       "Cerrar Sesión",
       "Cancelar"
     );
-  };
-
-  // Request Access Submission
-  const handleSendRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    
-    setIsSubmittingRequest(true);
-    const userDocRef = doc(db, "users", user.uid);
-    const pendingProfile = {
-      uid: user.uid,
-      email: user.email || "",
-      name: requestName.trim() || user.displayName || "Estudiante",
-      status: "pending",
-      isAdmin: false,
-      requestedAt: new Date().toISOString(),
-      notes: requestNotes.trim()
-    };
-
-    try {
-      await setDoc(userDocRef, pendingProfile);
-      setUserProfile(pendingProfile);
-    } catch (err) {
-      console.error("Error creating pending profile request:", err);
-      showCustomAlert("Error de Registro", "Hubo un error al registrar tu solicitud. Intenta más tarde.");
-    } finally {
-      setIsSubmittingRequest(false);
-    }
   };
 
   // Restores demo schema
@@ -901,10 +917,44 @@ export default function App() {
   // 1. LOADING SCREEN
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#faf6ee] dark:bg-stone-950 flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-[#faf6ee] dark:bg-stone-950 flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto">
         <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
         <p className="font-display font-bold text-lg text-amber-900 dark:text-amber-400">Cargando StudyPlanner...</p>
         <p className="text-xs text-stone-500 mt-1">Conectando con base de datos de Firebase</p>
+        
+        {loadingTimeout && (
+          <div className="mt-8 p-6 bg-amber-50/80 dark:bg-stone-900/80 border-2 border-amber-200 dark:border-stone-800 rounded-2xl max-w-md text-left space-y-4 shadow-xl">
+            <h3 className="font-display font-bold text-amber-950 dark:text-amber-300 text-sm flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0" />
+              ¿Está tardando demasiado?
+            </h3>
+            <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
+              Esto suele ocurrir si Firebase no está completamente configurado o si hay problemas de autorización. Por favor verifica:
+            </p>
+            <ul className="text-xs text-stone-600 dark:text-stone-400 list-disc list-inside space-y-1.5">
+              <li>Haber agregado los dominios de AI Studio a <strong>Authorized Domains</strong> en Firebase Authentication.</li>
+              <li>Haber activado el proveedor de <strong>Google Sign-In</strong> en Firebase Authentication.</li>
+              <li>Haber inicializado tu base de datos Firestore en modo desarrollo o con reglas de lectura/escritura válidas.</li>
+            </ul>
+            <div className="flex flex-wrap gap-2 pt-2">
+              <button
+                onClick={() => setAuthLoading(false)}
+                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3 py-2 rounded-lg cursor-pointer transition-colors"
+              >
+                Omitir Espera (Ver Interfaz)
+              </button>
+              <button
+                onClick={() => {
+                  signOut(auth);
+                  setAuthLoading(false);
+                }}
+                className="bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-bold px-3 py-2 rounded-lg cursor-pointer transition-colors"
+              >
+                Cerrar Sesión / Desconectar
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -937,19 +987,26 @@ export default function App() {
 
             <div className="border-t border-amber-100 dark:border-stone-800 pt-6">
               <p className="text-xs text-stone-500 dark:text-stone-400 mb-4 font-mono">
-                Ingreso protegido con aprobación de invitaciones.
+                Ingreso inmediato y sincronizado en la nube.
               </p>
               <button
                 onClick={handleGoogleLogin}
-                className="w-full flex items-center justify-center gap-3 bg-[#fdfbf6] dark:bg-stone-800 hover:bg-amber-50 dark:hover:bg-stone-750 text-amber-950 dark:text-amber-300 font-bold font-display py-3.5 px-4 rounded-xl border-2 border-amber-200 dark:border-stone-700 shadow-md hover:scale-[1.02] active:scale-[0.98] cursor-pointer transition-all duration-200"
+                disabled={isLoggingIn}
+                className={`w-full flex items-center justify-center gap-3 bg-[#fdfbf6] dark:bg-stone-800 hover:bg-amber-50 dark:hover:bg-stone-750 text-amber-950 dark:text-amber-300 font-bold font-display py-3.5 px-4 rounded-xl border-2 border-amber-200 dark:border-stone-700 shadow-md hover:scale-[1.02] active:scale-[0.98] cursor-pointer transition-all duration-200 ${
+                  isLoggingIn ? "opacity-60 cursor-not-allowed" : ""
+                }`}
               >
-                <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
-                  <path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.48 15.02 1 12 1 7.24 1 3.23 3.73 1.25 7.72l3.86 3C6.01 7.54 8.76 5.04 12 5.04z" />
-                  <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.44h6.44c-.28 1.44-1.11 2.66-2.33 3.48v2.89h3.77c2.2-2.03 3.61-5.01 3.61-8.47z" />
-                  <path fill="#FBBC05" d="M5.11 14.72c-.25-.72-.39-1.5-.39-2.31s.14-1.59.39-2.31l-3.86-3C.44 8.73 0 10.31 0 12s.44 3.27 1.25 4.89l3.86-3.17z" />
-                  <path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.92l-3.77-2.89c-1.11.74-2.52 1.19-4.19 1.19-3.24 0-5.99-2.5-6.99-5.68l-3.86 3C3.23 20.27 7.24 23 12 23z" />
-                </svg>
-                Ingresar con Google
+                {isLoggingIn ? (
+                  <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
+                    <path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.48 15.02 1 12 1 7.24 1 3.23 3.73 1.25 7.72l3.86 3C6.01 7.54 8.76 5.04 12 5.04z" />
+                    <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.44h6.44c-.28 1.44-1.11 2.66-2.33 3.48v2.89h3.77c2.2-2.03 3.61-5.01 3.61-8.47z" />
+                    <path fill="#FBBC05" d="M5.11 14.72c-.25-.72-.39-1.5-.39-2.31s.14-1.59.39-2.31l-3.86-3C.44 8.73 0 10.31 0 12s.44 3.27 1.25 4.89l3.86-3.17z" />
+                    <path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.92l-3.77-2.89c-1.11.74-2.52 1.19-4.19 1.19-3.24 0-5.99-2.5-6.99-5.68l-3.86 3C3.23 20.27 7.24 23 12 23z" />
+                  </svg>
+                )}
+                {isLoggingIn ? "Conectando con Google..." : "Ingresar con Google"}
               </button>
             </div>
           </div>
@@ -959,107 +1016,7 @@ export default function App() {
     );
   }
 
-  // 3. PENDING REQUEST OR REJECTED GUEST VIEW
-  if (userStatus === null || userStatus === "pending" || userStatus === "rejected") {
-    return (
-      <div className="min-h-screen bg-[#faf6ee] dark:bg-stone-950 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white dark:bg-stone-900 border-4 border-amber-200 dark:border-stone-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
-          <div className="flex items-center gap-3 border-b border-amber-100 dark:border-stone-800 pb-4">
-            <img src={user.photoURL || ""} alt={user.displayName || ""} referrerPolicy="no-referrer" className="w-10 h-10 rounded-full border-2 border-amber-300" />
-            <div className="text-left">
-              <h3 className="font-bold text-sm text-stone-850 dark:text-stone-100">{user.displayName}</h3>
-              <p className="text-xs text-stone-500">{user.email}</p>
-            </div>
-          </div>
-
-          {userStatus === null && (
-            <form onSubmit={handleSendRequest} className="space-y-4 text-left">
-              <div className="p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20 text-xs text-amber-900 dark:text-amber-300 space-y-1.5">
-                <p className="font-bold uppercase tracking-wider flex items-center gap-1">
-                  <ShieldAlert className="w-4 h-4 text-amber-600" /> Acceso Privado Requerido
-                </p>
-                <p>
-                  Para registrarte y utilizar StudyPlanner, debes mandar una solicitud de invitación. Una vez aceptada por el administrador, podrás ingresar a tu agenda.
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wide">Nombre Completo</label>
-                <input
-                  type="text"
-                  required
-                  value={requestName}
-                  onChange={(e) => setRequestName(e.target.value)}
-                  placeholder="Tu nombre completo"
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-[#fdfbf6] dark:bg-stone-800 text-sm focus:outline-none focus:border-amber-500 text-stone-800 dark:text-stone-100"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wide">Objetivo de Estudio / Notas</label>
-                <textarea
-                  required
-                  value={requestNotes}
-                  onChange={(e) => setRequestNotes(e.target.value)}
-                  placeholder="Ej: Quiero usar StudyPlanner para aprobar geografía de América en el examen de Junio..."
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-[#fdfbf6] dark:bg-stone-800 text-sm h-24 focus:outline-none focus:border-amber-500 text-stone-800 dark:text-stone-100"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmittingRequest}
-                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-xl shadow-md transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
-              >
-                {isSubmittingRequest ? "Enviando..." : "Mandar Invitación"}
-              </button>
-            </form>
-          )}
-
-          {userStatus === "pending" && (
-            <div className="text-center py-6 space-y-4">
-              <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto text-amber-500 animate-pulse">
-                <Clock className="w-6 h-6" />
-              </div>
-              <div className="space-y-1.5">
-                <h4 className="font-display font-extrabold text-amber-950 dark:text-amber-400">Solicitud Pendiente</h4>
-                <p className="text-sm text-stone-600 dark:text-stone-300">
-                  Tu invitación fue enviada con éxito. Por favor espera a que un administrador apruebe tu registro.
-                </p>
-              </div>
-              <p className="text-[10px] text-stone-400 font-mono italic">
-                La página se actualizará automáticamente cuando tu solicitud sea aprobada.
-              </p>
-            </div>
-          )}
-
-          {userStatus === "rejected" && (
-            <div className="text-center py-6 space-y-4 text-left">
-              <div className="w-12 h-12 bg-rose-100 dark:bg-rose-950/40 rounded-full flex items-center justify-center mx-auto text-rose-500">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <div className="space-y-1.5 text-center">
-                <h4 className="font-display font-extrabold text-rose-900 dark:text-rose-400">Solicitud No Aceptada</h4>
-                <p className="text-sm text-stone-600 dark:text-stone-300">
-                  Lo sentimos, tu solicitud de registro fue rechazada o removida por el administrador.
-                </p>
-              </div>
-            </div>
-          )}
-
-          <button
-            onClick={handleSignOut}
-            className="w-full py-2.5 rounded-xl border border-stone-200 dark:border-stone-800 hover:bg-stone-50 dark:hover:bg-stone-850 text-xs font-bold text-stone-600 dark:text-stone-400 flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <LogOut className="w-3.5 h-3.5" /> Cerrar Sesión
-          </button>
-        </div>
-        {renderDialogModal()}
-      </div>
-    );
-  }
-
-  // 4. APPROVED / MAIN APPLICATION VIEW
+  // 3. MAIN APPLICATION VIEW
   return (
     <div className={`min-h-screen font-sans pb-12 transition-colors duration-200 ${
       theme === "oscuro" ? "bg-stone-950 text-stone-100" : "bg-[#faf6ee] text-slate-800"
