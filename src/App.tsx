@@ -1388,7 +1388,8 @@ export default function App() {
               }`}
               title="Restaurar todo a la demo escolar en Firebase"
             >
-              <RefreshCw className="w-3 h-3 animate-spin hover:animate-none" /> Restaurar Agenda
+              <RefreshCw className="w-3 h-3 animate-spin hover:animate-none" />
+              <span>Restaurar Agenda</span>
             </button>
           </nav>
 

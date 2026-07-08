@@ -137,7 +137,7 @@ export default function ReminderSection({
             className="w-full sm:w-auto self-start sm:self-center flex-shrink-0 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] text-xs flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <Bell className="w-3.5 h-3.5" />
-            Activar Alertas
+            <span>Activar Alertas</span>
           </button>
         )}
       </div>
@@ -146,7 +146,7 @@ export default function ReminderSection({
       <div id="add-reminder-form" className="bg-sky-50/70 border border-sky-200 rounded-xl p-5 shadow-sm relative">
         <h3 className="font-display font-bold text-lg text-sky-900 mb-4 flex items-center gap-2">
           <Bell className="w-5 h-5 text-sky-600" />
-          Fijar Nuevo Recordatorio
+          <span>Fijar Nuevo Recordatorio</span>
         </h3>
 
         <form onSubmit={handleAddReminder} className="flex flex-col sm:flex-row gap-4 items-end">
@@ -181,7 +181,7 @@ export default function ReminderSection({
             className="w-full sm:w-auto bg-sky-600 hover:bg-sky-700 text-white cursor-pointer px-4 py-2 rounded-lg font-display text-sm font-bold shadow-sm transition flex items-center justify-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
-            Fijar
+            <span>Fijar</span>
           </button>
         </form>
       </div>
