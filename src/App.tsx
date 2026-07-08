@@ -1362,19 +1362,20 @@ export default function App() {
             </button>
 
             {/* Admin tab (Visible only to designated admins) */}
-            {userProfile?.isAdmin && (
-              <>
-                <div className={`hidden md:block border-t my-2 ${theme === "oscuro" ? "border-stone-800" : "border-stone-200/80"}`}></div>
-                <button
-                  id="tab-admin"
-                  onClick={() => setActiveTab("admin")}
-                  className={getTabClass("admin", "border-l-rose-600", "text-rose-900", "text-rose-300", "bg-rose-50/10")}
-                >
-                  <UserCheck className="w-4 h-4 flex-shrink-0" />
-                  <span className="font-bold text-rose-700 dark:text-rose-400">Invitaciones</span>
-                </button>
-              </>
-            )}
+            {userProfile?.isAdmin ? (
+              <div key="admin-divider" className={`hidden md:block border-t my-2 ${theme === "oscuro" ? "border-stone-800" : "border-stone-200/80"}`}></div>
+            ) : null}
+            {userProfile?.isAdmin ? (
+              <button
+                key="admin-tab-btn"
+                id="tab-admin"
+                onClick={() => setActiveTab("admin")}
+                className={getTabClass("admin", "border-l-rose-600", "text-rose-900", "text-rose-300", "bg-rose-50/10")}
+              >
+                <UserCheck className="w-4 h-4 flex-shrink-0" />
+                <span className="font-bold text-rose-700 dark:text-rose-400">Invitaciones</span>
+              </button>
+            ) : null}
 
             <div className={`hidden md:block border-t my-2 ${theme === "oscuro" ? "border-stone-800" : "border-stone-200/80"}`}></div>
 
@@ -1542,7 +1543,9 @@ export default function App() {
         <div className="flex flex-col sm:flex-row justify-between items-center mt-6 text-stone-400 dark:text-stone-500 text-[10px] font-mono gap-2 px-2 select-none">
           <div className="flex items-center gap-1">
             <span>Sesión activa como: {user.email}</span>
-            {userProfile?.isAdmin && <span className="bg-rose-950/20 text-rose-500 px-1 rounded border border-rose-900/30 font-bold">ADMIN</span>}
+            {userProfile?.isAdmin ? (
+              <span key="admin-tag-footer" className="bg-rose-950/20 text-rose-500 px-1 rounded border border-rose-900/30 font-bold">ADMIN</span>
+            ) : null}
           </div>
           <div className="flex items-center gap-1 text-center sm:text-right">
             <span>Powered by Firebase Cloud Firestore & Google Auth</span>
