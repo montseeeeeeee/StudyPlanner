@@ -739,6 +739,27 @@ export default function App() {
     }
   };
 
+  // Utility to recursively remove undefined fields so Firestore doesn't crash on batch.set()
+  const sanitizeForFirestore = (obj: any): any => {
+    if (obj === null || obj === undefined) return null;
+    if (Array.isArray(obj)) {
+      return obj.map(item => sanitizeForFirestore(item));
+    }
+    if (typeof obj === "object") {
+      const res: any = {};
+      for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+          const val = obj[key];
+          if (val !== undefined) {
+            res[key] = sanitizeForFirestore(val);
+          }
+        }
+      }
+      return res;
+    }
+    return obj;
+  };
+
   // Seeder helper for initial setup
   const seedInitialDataToFirestore = async (userId: string) => {
     try {
@@ -746,20 +767,20 @@ export default function App() {
       const batch = writeBatch(db);
 
       // Categories
-      batch.set(doc(db, "categories", userId), { userId, list: INITIAL_CATEGORIES });
+      batch.set(doc(db, "categories", userId), sanitizeForFirestore({ userId, list: INITIAL_CATEGORIES }));
       // Passing score
-      batch.set(doc(db, "passing_scores", userId), { userId, score: 6 });
+      batch.set(doc(db, "passing_scores", userId), sanitizeForFirestore({ userId, score: 6 }));
 
       // Lists
-      INITIAL_TASKS.forEach((t) => batch.set(doc(db, "tasks", t.id), { ...t, userId }));
-      INITIAL_EVENTS.forEach((e) => batch.set(doc(db, "events", e.id), { ...e, userId }));
-      INITIAL_REMINDERS.forEach((r) => batch.set(doc(db, "reminders", r.id), { ...r, userId }));
-      INITIAL_STUDY.forEach((m) => batch.set(doc(db, "study_materials", m.id), { ...m, userId }));
-      INITIAL_SCHEDULES.forEach((s) => batch.set(doc(db, "schedules", s.id), { ...s, userId }));
-      INITIAL_FLASHCARDS.forEach((f) => batch.set(doc(db, "flashcards", f.id), { ...f, userId }));
-      INITIAL_STUDY_NOTES.forEach((n) => batch.set(doc(db, "study_notes", n.id), { ...n, userId }));
-      INITIAL_STUDY_GOALS.forEach((g) => batch.set(doc(db, "study_goals", g.id), { ...g, userId }));
-      INITIAL_STUDY_CHECKLISTS.forEach((c) => batch.set(doc(db, "study_checklists", c.id), { ...c, userId }));
+      INITIAL_TASKS.forEach((t) => batch.set(doc(db, "tasks", t.id), sanitizeForFirestore({ ...t, userId })));
+      INITIAL_EVENTS.forEach((e) => batch.set(doc(db, "events", e.id), sanitizeForFirestore({ ...e, userId })));
+      INITIAL_REMINDERS.forEach((r) => batch.set(doc(db, "reminders", r.id), sanitizeForFirestore({ ...r, userId })));
+      INITIAL_STUDY.forEach((m) => batch.set(doc(db, "study_materials", m.id), sanitizeForFirestore({ ...m, userId })));
+      INITIAL_SCHEDULES.forEach((s) => batch.set(doc(db, "schedules", s.id), sanitizeForFirestore({ ...s, userId })));
+      INITIAL_FLASHCARDS.forEach((f) => batch.set(doc(db, "flashcards", f.id), sanitizeForFirestore({ ...f, userId })));
+      INITIAL_STUDY_NOTES.forEach((n) => batch.set(doc(db, "study_notes", n.id), sanitizeForFirestore({ ...n, userId })));
+      INITIAL_STUDY_GOALS.forEach((g) => batch.set(doc(db, "study_goals", g.id), sanitizeForFirestore({ ...g, userId })));
+      INITIAL_STUDY_CHECKLISTS.forEach((c) => batch.set(doc(db, "study_checklists", c.id), sanitizeForFirestore({ ...c, userId })));
 
       // Feynman & Maps
       const demoFeynman: FeynmanExplanation = {
@@ -770,7 +791,7 @@ export default function App() {
         reviewConcepts: "Vectores, rozamiento estático.",
         createdAt: "2026-06-24"
       };
-      batch.set(doc(db, "feynman_explanations", demoFeynman.id), { ...demoFeynman, userId });
+      batch.set(doc(db, "feynman_explanations", demoFeynman.id), sanitizeForFirestore({ ...demoFeynman, userId }));
 
       const demoMap: MindMap = {
         id: "map-1",
@@ -780,7 +801,7 @@ export default function App() {
         ideas: ["Mercurio (Caliente)", "Venus (Invernadero)", "Tierra (Agua)", "Marte (Hierro)", "Júpiter (Gas)"],
         createdAt: "2026-06-24"
       };
-      batch.set(doc(db, "mind_maps", demoMap.id), { ...demoMap, userId });
+      batch.set(doc(db, "mind_maps", demoMap.id), sanitizeForFirestore({ ...demoMap, userId }));
 
       // Grades
       const demoGrades = [
@@ -810,7 +831,7 @@ export default function App() {
           ]
         }
       ];
-      demoGrades.forEach((dg) => batch.set(doc(db, "subject_grades", dg.id), { ...dg, userId }));
+      demoGrades.forEach((dg) => batch.set(doc(db, "subject_grades", dg.id), sanitizeForFirestore({ ...dg, userId })));
 
       await batch.commit();
       console.log("Template dataset seeded successfully.");
@@ -839,7 +860,7 @@ export default function App() {
     try {
       const batch = writeBatch(db);
       addedOrUpdated.forEach((item) => {
-        batch.set(doc(db, colName, item.id), { ...item, userId: user.uid });
+        batch.set(doc(db, colName, item.id), sanitizeForFirestore({ ...item, userId: user.uid }));
       });
       deleted.forEach((item) => {
         batch.delete(doc(db, colName, item.id));
