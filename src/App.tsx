@@ -601,6 +601,144 @@ export default function App() {
     };
   }, [user, userStatus]);
 
+  // Browser notifications state and background checker
+  const [notificationPermission, setNotificationPermission] = useState<string>(
+    typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default"
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+
+    const updatePermission = () => {
+      setNotificationPermission(Notification.permission);
+    };
+
+    window.addEventListener("focus", updatePermission);
+    return () => window.removeEventListener("focus", updatePermission);
+  }, []);
+
+  useEffect(() => {
+    if (notificationPermission !== "granted" || reminders.length === 0) return;
+
+    const checkAndSendNotifications = () => {
+      const now = new Date();
+      let notifiedIds: string[] = [];
+      try {
+        const stored = localStorage.getItem("notified_reminder_ids");
+        if (stored) {
+          notifiedIds = JSON.parse(stored);
+        }
+      } catch (e) {
+        console.error("Error reading notified_reminder_ids:", e);
+      }
+
+      let updatedNotifiedIds = [...notifiedIds];
+      let hasNewNotifications = false;
+
+      reminders.forEach((rem) => {
+        if (rem.completed) return;
+
+        const targetTime = new Date(rem.datetime);
+        const diffMs = now.getTime() - targetTime.getTime();
+        const diffMinutes = diffMs / (1000 * 60);
+
+        // Notify if it's due in the past but not older than 120 minutes (2 hours)
+        if (diffMinutes >= 0 && diffMinutes <= 120 && !notifiedIds.includes(rem.id)) {
+          try {
+            const notification = new Notification("📌 Recordatorio de StudyPlanner", {
+              body: rem.title,
+              icon: "/favicon.ico",
+              tag: rem.id,
+              requireInteraction: true,
+            });
+
+            notification.onclick = () => {
+              window.focus();
+              setActiveTab("reminders");
+            };
+
+            // Audio beep synthesis (Web Audio API)
+            try {
+              const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const oscillator = audioCtx.createOscillator();
+              const gainNode = audioCtx.createGain();
+              oscillator.connect(gainNode);
+              gainNode.connect(audioCtx.destination);
+              oscillator.type = "sine";
+              oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+              gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+              oscillator.start();
+              oscillator.stop(audioCtx.currentTime + 0.15);
+
+              setTimeout(() => {
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+                osc2.type = "sine";
+                osc2.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+                gain2.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                osc2.start();
+                osc2.stop(audioCtx.currentTime + 0.25);
+              }, 180);
+            } catch (soundErr) {
+              console.warn("Could not play notification sound:", soundErr);
+            }
+          } catch (err) {
+            console.error("Failed to show desktop notification:", err);
+          }
+
+          updatedNotifiedIds.push(rem.id);
+          hasNewNotifications = true;
+        }
+      });
+
+      if (hasNewNotifications) {
+        try {
+          localStorage.setItem("notified_reminder_ids", JSON.stringify(updatedNotifiedIds));
+        } catch (e) {
+          console.error("Error saving notified_reminder_ids:", e);
+        }
+      }
+    };
+
+    checkAndSendNotifications();
+    const interval = setInterval(checkAndSendNotifications, 20000);
+    return () => clearInterval(interval);
+  }, [reminders, notificationPermission]);
+
+  const handleRequestNotificationPermission = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      showCustomAlert(
+        "No Soportado",
+        "Tu navegador no soporta la API de notificaciones de escritorio."
+      );
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === "granted") {
+        showCustomAlert(
+          "¡Notificaciones Activas! 🔔",
+          "Te enviaremos una alerta de escritorio cada vez que se cumpla la hora de tus recordatorios guardados en Firebase."
+        );
+        new Notification("¡StudyPlanner Alertas Activas! 🎉", {
+          body: "Las notificaciones en tiempo real para tus recordatorios de estudio están listas.",
+          icon: "/favicon.ico"
+        });
+      } else if (permission === "denied") {
+        showCustomAlert(
+          "Notificaciones Bloqueadas",
+          "Has denegado el permiso. Por favor, actívalas en la configuración de seguridad de tu navegador para recibir alertas."
+        );
+      }
+    } catch (err) {
+      console.error("Error requesting notification permission:", err);
+    }
+  };
+
   // Seeder helper for initial setup
   const seedInitialDataToFirestore = async (userId: string) => {
     try {
@@ -1312,7 +1450,12 @@ export default function App() {
 
             {activeTab === "reminders" && (
               <div id="section-reminders" className="animate-fade-in">
-                <ReminderSection reminders={reminders} onUpdateReminders={handleUpdateReminders} />
+                <ReminderSection
+                  reminders={reminders}
+                  onUpdateReminders={handleUpdateReminders}
+                  notificationPermission={notificationPermission}
+                  onRequestNotificationPermission={handleRequestNotificationPermission}
+                />
               </div>
             )}
 

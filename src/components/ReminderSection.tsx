@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Reminder } from "../types";
-import { Plus, Trash, Clock, Bell, Calendar, Pin, Square, CheckSquare } from "lucide-react";
+import { Plus, Trash, Clock, Bell, BellOff, Calendar, Pin, Square, CheckSquare, ShieldCheck, AlertTriangle } from "lucide-react";
 
 interface ReminderSectionProps {
   reminders: Reminder[];
   onUpdateReminders: (reminders: Reminder[]) => void;
+  notificationPermission: string;
+  onRequestNotificationPermission: () => void;
 }
 
 const PASTEL_COLORS = [
@@ -15,7 +17,12 @@ const PASTEL_COLORS = [
   "bg-purple-100 hover:bg-purple-200/95 border-purple-200 text-purple-900"
 ];
 
-export default function ReminderSection({ reminders, onUpdateReminders }: ReminderSectionProps) {
+export default function ReminderSection({
+  reminders,
+  onUpdateReminders,
+  notificationPermission,
+  onRequestNotificationPermission
+}: ReminderSectionProps) {
   const [title, setTitle] = useState("");
   const [datetime, setDatetime] = useState("");
 
@@ -82,6 +89,59 @@ export default function ReminderSection({ reminders, onUpdateReminders }: Remind
 
   return (
     <div className="space-y-6">
+      {/* Notification API Status and Permission Request Banner */}
+      <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm transition-all duration-300 ${
+        notificationPermission === "granted"
+          ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/30 text-emerald-900 dark:text-emerald-300"
+          : notificationPermission === "denied"
+          ? "bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/30 text-rose-900 dark:text-rose-300"
+          : "bg-amber-50 dark:bg-amber-950/25 border-amber-200 dark:border-amber-900/35 text-amber-900 dark:text-amber-300"
+      }`}>
+        <div className="flex items-start gap-3">
+          <div className={`p-2 rounded-lg flex-shrink-0 ${
+            notificationPermission === "granted"
+              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              : notificationPermission === "denied"
+              ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+              : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+          }`}>
+            {notificationPermission === "granted" ? (
+              <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            ) : notificationPermission === "denied" ? (
+              <BellOff className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+            ) : (
+              <Bell className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            )}
+          </div>
+          <div>
+            <h4 className="font-bold flex items-center gap-1.5 font-display text-stone-850 dark:text-stone-100">
+              {notificationPermission === "granted"
+                ? "Alertas Push de Escritorio Activas"
+                : notificationPermission === "denied"
+                ? "Notificaciones Bloqueadas en Navegador"
+                : "Recibe Avisos de Estudio en Tiempo Real"}
+            </h4>
+            <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5 font-sans leading-relaxed">
+              {notificationPermission === "granted"
+                ? "Estupendo. Te enviaremos una alerta de pantalla en tiempo real en cuanto se cumpla la hora de tus recordatorios."
+                : notificationPermission === "denied"
+                ? "Permisos bloqueados. Para activarlos, haz clic en el candado junto a la dirección web y cambia el permiso de Notificaciones a 'Permitir'."
+                : "Habilita las notificaciones nativas del navegador para recibir alertas sobre tus tareas y exámenes escolares pendientes."}
+            </p>
+          </div>
+        </div>
+
+        {notificationPermission === "default" && (
+          <button
+            onClick={onRequestNotificationPermission}
+            className="w-full sm:w-auto self-start sm:self-center flex-shrink-0 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Bell className="w-3.5 h-3.5" />
+            Activar Alertas
+          </button>
+        )}
+      </div>
+
       {/* Formulario Agregar Recordatorio */}
       <div id="add-reminder-form" className="bg-sky-50/70 border border-sky-200 rounded-xl p-5 shadow-sm relative">
         <h3 className="font-display font-bold text-lg text-sky-900 mb-4 flex items-center gap-2">
